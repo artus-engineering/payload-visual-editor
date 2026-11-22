@@ -52,6 +52,8 @@ jobs:
         run: yarn install --frozen-lockfile
       - name: Build
         run: yarn build
+      - name: Test preview security
+        run: yarn test
   scan:
     name: SonarQube Scan
     runs-on: ubuntu-latest

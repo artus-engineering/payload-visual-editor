@@ -1,5 +1,5 @@
 export interface PreviewUrlParams {
-    locale: string;
+  locale: string;
 }
 
 export type PreviewUrlFn = (params: PreviewUrlParams) => string;

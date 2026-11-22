@@ -129,14 +129,16 @@
                     position: fixed;
                     inset: 0;
                     z-index: 1;
+                    border: 0;
+                    padding: 0;
+                    background: transparent;
                 }
 
-                >button {
+                >button:not(.backdrop) {
                     position: relative;
                     border: none;
                     background: none;
                     appearance: none;
-                    padding: 0;
                     cursor: pointer;
                     height: 100%;
                     padding: 0 base(.95) 0 base(.5);
@@ -187,7 +189,7 @@
                         overflow: hidden;
 
                         >li {
-                            >button {
+                            >button:not(.backdrop) {
                                 border: none;
                                 background: none;
                                 appearance: none;
@@ -239,11 +241,10 @@
                 margin-left: auto;
                 padding-right: base(.15);
 
-                >button {
+                >button:not(.backdrop) {
                     border: none;
                     background: none;
                     appearance: none;
-                    padding: 0;
                     cursor: pointer;
                     height: 100%;
                     padding: base(.25);

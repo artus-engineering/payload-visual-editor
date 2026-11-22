@@ -1,376 +1,411 @@
 import { reduceFieldsToValues } from "payload/components/forms";
 import { Data, Fields } from "payload/dist/admin/components/forms/Form/types";
 import {
-    ArrayField,
-    BlockField,
-    FieldAffectingData,
-    GroupField,
-    RadioField,
-    RelationshipField,
-    RichTextField,
-    SelectField,
-    UploadField,
-    ValueWithRelation,
-    fieldAffectsData,
-    fieldHasSubFields,
-    fieldIsPresentationalOnly,
-    optionIsObject
+  ArrayField,
+  BlockField,
+  FieldAffectingData,
+  GroupField,
+  RadioField,
+  RelationshipField,
+  RichTextField,
+  SelectField,
+  UploadField,
+  ValueWithRelation,
+  fieldAffectsData,
+  fieldHasSubFields,
+  fieldIsPresentationalOnly,
+  optionIsObject,
 } from "payload/dist/fields/config/types";
-import { Block, Field, SanitizedCollectionConfig, SanitizedGlobalConfig } from "payload/types";
+import {
+  Block,
+  Field,
+  SanitizedCollectionConfig,
+  SanitizedGlobalConfig,
+} from "payload/types";
 import { match } from "ts-pattern";
 
 const cache = new Map();
 
 export interface GenDocConfig {
-    collections: SanitizedCollectionConfig[];
-    globals: SanitizedGlobalConfig[];
-    fieldConfigs: Field[];
-    serverUrl: string;
-    apiPath: string;
+  collections: SanitizedCollectionConfig[];
+  globals: SanitizedGlobalConfig[];
+  fieldConfigs: Field[];
+  serverUrl: string;
+  apiPath: string;
+  documentId?: string | number;
 }
 
 const getCollectionOrGlobalConfig = (config: GenDocConfig, slug: string) => {
-    const cogConfig = config.collections.find(c => c.slug === slug) ?? config.globals.find(g => g.slug === slug);
+  const cogConfig =
+    config.collections.find((c) => c.slug === slug) ??
+    config.globals.find((g) => g.slug === slug);
 
-    if (!cogConfig) {
-        throw new Error(`can't find config for ${slug}`);
-    }
+  if (!cogConfig) {
+    throw new Error(`can't find config for ${slug}`);
+  }
 
-    return cogConfig;
+  return cogConfig;
 };
 
 const getFallback = (config: GenDocConfig, slug: string) => {
-    const cogConfig = getCollectionOrGlobalConfig(config, slug);
+  const cogConfig = getCollectionOrGlobalConfig(config, slug);
 
-    return cogConfig.custom.fallback ?? {};
+  return cogConfig.custom.fallback ?? {};
 };
 
-export const generateDocument = async (config: GenDocConfig, fields: Fields) => {
-    const fetchRelation = async (slug: string, id: string) => {
-        const key = `${slug}_${id}`;
+export const generateDocument = async (
+  config: GenDocConfig,
+  fields: Fields,
+) => {
+  const fetchRelation = async (slug: string, id: string) => {
+    const key = `${slug}_${id}`;
 
-        if (cache.has(key)) {
-            return cache.get(key);
-        }
-
-        const response = await fetch(`${config.serverUrl}${config.apiPath}/${slug}/${id}`);
-        const data = await response.json();
-
-        cache.set(key, data);
-
-        return data;
-    };
-
-    const getBlock = (blocks: Block[], blockType: string) => {
-        return blocks.find(b => b.slug === blockType)!;
-    };
-
-    const getAllFields = (fields: Field[]): Field[] => {
-        return fields
-            .filter((field) => !fieldIsPresentationalOnly(field))
-            .flatMap(field => {
-                if (fieldAffectsData(field)) {
-                    return field;
-                }
-
-                if (field.type === "tabs") {
-                    return field.tabs.flatMap(
-                        tab => getAllFields(tab.fields)
-                    );
-                }
-
-                if (fieldHasSubFields(field)) {
-                    return getAllFields(field.fields);
-                }
-
-                console.error(field);
-                throw new Error(`Unrecognized field type ${field.type}, please report at https://github.com/pemedia/payload-visual-editor/issues`);
-            });
-    };
-
-    const convertArrayField = async (field: ArrayField, values: Data) => {
-        const arrayFields = getAllFields(field.fields) as FieldAffectingData[];
-        const arrayValues = values[field.name];
-
-        const resolvedValues: any[] = [];
-
-        if (Array.isArray(arrayValues)) {
-            for (const value of arrayValues) {
-                const result: any = {};
-
-                for (let arrayField of arrayFields) {
-                    result[arrayField.name!] = await getValue(arrayField, value);
-                }
-
-                resolvedValues.push(result);
-            }
-        }
-
-        return resolvedValues;
-    };
-
-    const convertBlockField = async (field: BlockField, values: Data) => {
-        const blockValues = values[field.name];
-
-        if (field.required && !blockValues) {
-            return [];
-        }
-
-        if (!field.required && !blockValues) {
-            return undefined;
-        }
-
-        return Promise.all(
-            blockValues.map(async (value: Data) => {
-                const block = getBlock(field.blocks, value.blockType);
-                const fields = getAllFields(block.fields) as FieldAffectingData[];
-
-                const result: any = {
-                    id: value.id,
-                    blockType: value.blockType,
-                };
-
-                for (let field of fields) {
-                    result[field.name!] = await getValue(field, value);
-                }
-
-                return result;
-            }),
-        );
+    if (cache.has(key)) {
+      return cache.get(key);
     }
 
-    const convertGroupField = async (field: GroupField, values: Data) => {
-        const allGroupFields = getAllFields(field.fields) as FieldAffectingData[];
-        const groupValues = values[field.name];
+    const response = await fetch(
+      `${config.serverUrl}${config.apiPath}/${slug}/${id}`,
+    );
+    const data = await response.json();
 
+    cache.set(key, data);
+
+    return data;
+  };
+
+  const getBlock = (blocks: Block[], blockType: string) => {
+    return blocks.find((b) => b.slug === blockType)!;
+  };
+
+  const getAllFields = (fields: Field[]): Field[] => {
+    return fields
+      .filter((field) => !fieldIsPresentationalOnly(field))
+      .flatMap((field) => {
+        if (fieldAffectsData(field)) {
+          return field;
+        }
+
+        if (field.type === "tabs") {
+          return field.tabs.flatMap((tab) => getAllFields(tab.fields));
+        }
+
+        if (fieldHasSubFields(field)) {
+          return getAllFields(field.fields);
+        }
+
+        console.error(field);
+        throw new Error(
+          `Unrecognized field type ${field.type}, please report at https://github.com/pemedia/payload-visual-editor/issues`,
+        );
+      });
+  };
+
+  const convertArrayField = async (field: ArrayField, values: Data) => {
+    const arrayFields = getAllFields(field.fields) as FieldAffectingData[];
+    const arrayValues = values[field.name];
+
+    const resolvedValues: any[] = [];
+
+    if (Array.isArray(arrayValues)) {
+      for (const value of arrayValues) {
         const result: any = {};
 
-        for (const field of allGroupFields) {
-            result[field.name!] = await getValue(field, groupValues);
+        for (let arrayField of arrayFields) {
+          result[arrayField.name!] = await getValue(arrayField, value);
+        }
+
+        resolvedValues.push(result);
+      }
+    }
+
+    return resolvedValues;
+  };
+
+  const convertBlockField = async (field: BlockField, values: Data) => {
+    const blockValues = values[field.name];
+
+    if (field.required && !blockValues) {
+      return [];
+    }
+
+    if (!field.required && !blockValues) {
+      return undefined;
+    }
+
+    return Promise.all(
+      blockValues.map(async (value: Data) => {
+        const block = getBlock(field.blocks, value.blockType);
+        const fields = getAllFields(block.fields) as FieldAffectingData[];
+
+        const result: any = {
+          id: value.id,
+          blockType: value.blockType,
+        };
+
+        for (let field of fields) {
+          result[field.name!] = await getValue(field, value);
         }
 
         return result;
-    };
+      }),
+    );
+  };
 
-    const convertRadioField = (field: RadioField, values: Data) => {
-        const value = values[field.name];
+  const convertGroupField = async (field: GroupField, values: Data) => {
+    const allGroupFields = getAllFields(field.fields) as FieldAffectingData[];
+    const groupValues = values[field.name];
 
-        if (field.required && !value) {
-            if (optionIsObject(field.options[0])) {
-                return field.options[0].value;
-            }
+    const result: any = {};
 
-            return field.options[0];
-        }
-
-        return value;
-    };
-
-    const convertSingleTypeSingleValueRelationshipField = async (field: RelationshipField, values: Data) => {
-        const value = values[field.name] as string | undefined;
-        const relationTo = field.relationTo as string;
-
-        if (field.required && !value) {
-            return getFallback(config, relationTo);
-        }
-
-        if (!field.required && !value) {
-            return undefined;
-        }
-
-        return fetchRelation(relationTo, value!);
-    };
-
-    const convertSingleTypeMultiValueRelationshipField = (field: RelationshipField, values: Data) => {
-        const relations = values[field.name] as string[] | undefined;
-
-        if (field.required && !relations) {
-            return [];
-        }
-
-        if (!field.required && !relations) {
-            return undefined;
-        }
-
-        return Promise.all(
-            relations!.map((id: string) =>
-                fetchRelation(field.relationTo as string, id)
-            )
-        );
-    };
-
-    const convertMultiTypeSingleValueRelationshipField = async (field: RelationshipField, values: Data) => {
-        const relation = values[field.name] as ValueWithRelation | undefined;
-        const relationTo = field.relationTo as string[];
-
-        if (field.required && !relation) {
-            return {
-                relationTo: relationTo[0],
-                value: getFallback(config, relationTo[0]),
-            };
-        }
-
-        if (!field.required && !relation) {
-            return undefined;
-        }
-
-        const value = await fetchRelation(relation!.relationTo, relation!.value as string);
-
-        return {
-            relationTo: relation!.relationTo,
-            value,
-        };
-    };
-
-    const convertMultiTypeMultiValueRelationshipField = (field: RelationshipField, values: Data) => {
-        const relations = values[field.name];
-
-        if (field.required && !relations) {
-            return [];
-        }
-
-        if (!field.required && !relations) {
-            return undefined;
-        }
-
-        return Promise.all(
-            relations.map(async (relation: ValueWithRelation) => {
-                const value = await fetchRelation(relation.relationTo, relation.value as string);
-
-                return {
-                    relationTo: relation.relationTo,
-                    value,
-                };
-            }),
-        );
-    };
-
-    const convertRelationshipField = (field: RelationshipField, values: Data) => {
-        const isSingleType = typeof field.relationTo === "string";
-        const isSingleValue = field.hasMany ? false : true;
-
-        return match([isSingleType, isSingleValue])
-            .with([true, true], () => convertSingleTypeSingleValueRelationshipField(field, values))
-            .with([true, false], () => convertSingleTypeMultiValueRelationshipField(field, values))
-            .with([false, true], () => convertMultiTypeSingleValueRelationshipField(field, values))
-            .with([false, false], () => convertMultiTypeMultiValueRelationshipField(field, values))
-            .exhaustive();
-    };
-
-    const convertSingleSelectField = (field: SelectField, values: Data) => {
-        const value = values[field.name];
-
-        if (field.required && !value) {
-            if (optionIsObject(field.options[0])) {
-                return field.options[0].value;
-            }
-
-            return field.options[0];
-        }
-
-        return value;
-    };
-
-    const convertMultiSelectField = (field: SelectField, values: Data) => {
-        const value = values[field.name];
-
-        if (field.required && !value) {
-            return [];
-        }
-
-        return value;
-    };
-
-    const convertSelectField = (field: SelectField, values: Data) => {
-        if (field.hasMany) {
-            return convertMultiSelectField(field, values);
-        } else {
-            return convertSingleSelectField(field, values);
-        }
-    };
-
-    const convertUploadField = (field: UploadField, values: Data) => {
-        const id = values[field.name];
-
-        if (field.required && !id) {
-            return getFallback(config, field.relationTo);
-        }
-
-        if (!field.required && !id) {
-            return undefined;
-        }
-
-        return fetchRelation(field.relationTo, values[field.name]);
-    };
-
-    const convertRichTextField = (field: RichTextField, values: Data) => {
-        const value = values[field.name];
-
-        if (field.required && !value) {
-            // lexical editor
-            if ((field.editor as any).editorConfig?.lexical) {
-                return ({
-                    root: {},
-                });
-            }
-
-            // slate editor
-            return [];
-        }
-
-        return value;
-    };
-
-    const convertSimpleField = (defaultValue: any) => (field: { name: string; required?: boolean; }, values: Data) => {
-        const value = values[field.name];
-
-        if (field.required) {
-            return value ?? defaultValue;
-        }
-
-        return value;
-    };
-
-    const convertCheckboxField = convertSimpleField(false);
-    const convertNumberField = convertSimpleField(0);
-    const convertPointField = convertSimpleField([0, 0]);
-    const convertStringField = convertSimpleField("");
-
-    const getValue = async (field: FieldAffectingData, values: Data) => match(field)
-        .with({ type: "array" }, f => convertArrayField(f, values))
-        .with({ type: "blocks" }, f => convertBlockField(f, values))
-        .with({ type: "checkbox" }, f => convertCheckboxField(f, values))
-        .with({ type: "code" }, f => convertStringField(f, values))
-        .with({ type: "date" }, f => convertStringField(f, values))
-        .with({ type: "email" }, f => convertStringField(f, values))
-        .with({ type: "group" }, f => convertGroupField(f, values))
-        .with({ type: "json" }, f => convertStringField(f, values))
-        .with({ type: "number" }, f => convertNumberField(f, values))
-        .with({ type: "point" }, f => convertPointField(f, values))
-        .with({ type: "radio" }, f => convertRadioField(f, values))
-        .with({ type: "relationship" }, f => convertRelationshipField(f, values))
-        .with({ type: "richText" }, f => convertRichTextField(f, values))
-        .with({ type: "select" }, f => convertSelectField(f, values))
-        .with({ type: "tab" }, _ => { throw new Error("tab field not implemented"); })
-        .with({ type: "text" }, f => convertStringField(f, values))
-        .with({ type: "textarea" }, f => convertStringField(f, values))
-        .with({ type: "upload" }, f => convertUploadField(f, values))
-        .exhaustive();
-
-    const { fieldConfigs } = config;
-
-    const allFields = getAllFields(fieldConfigs) as FieldAffectingData[];
-    const values = reduceFieldsToValues(fields, true);
-
-    const result: any = {
-        // todo: id
-        createdAt: values.createdAt,
-        updatedAt: values.updatedAt,
-    };
-
-    for (let field of allFields) {
-        result[field.name!] = await getValue(field, values);
+    for (const field of allGroupFields) {
+      result[field.name!] = await getValue(field, groupValues);
     }
 
     return result;
+  };
+
+  const convertSingleOptionField = (
+    field: RadioField | SelectField,
+    values: Data,
+  ) => {
+    const value = values[field.name];
+
+    if (field.required && !value) {
+      if (optionIsObject(field.options[0])) {
+        return field.options[0].value;
+      }
+
+      return field.options[0];
+    }
+
+    return value;
+  };
+
+  const convertSingleTypeSingleValueRelationshipField = async (
+    field: RelationshipField,
+    values: Data,
+  ) => {
+    const value = values[field.name] as string | undefined;
+    const relationTo = field.relationTo as string;
+
+    if (field.required && !value) {
+      return getFallback(config, relationTo);
+    }
+
+    if (!field.required && !value) {
+      return undefined;
+    }
+
+    return fetchRelation(relationTo, value!);
+  };
+
+  const convertSingleTypeMultiValueRelationshipField = (
+    field: RelationshipField,
+    values: Data,
+  ) => {
+    const relations = values[field.name] as string[] | undefined;
+
+    if (field.required && !relations) {
+      return [];
+    }
+
+    if (!field.required && !relations) {
+      return undefined;
+    }
+
+    return Promise.all(
+      relations!.map((id: string) =>
+        fetchRelation(field.relationTo as string, id),
+      ),
+    );
+  };
+
+  const convertMultiTypeSingleValueRelationshipField = async (
+    field: RelationshipField,
+    values: Data,
+  ) => {
+    const relation = values[field.name] as ValueWithRelation | undefined;
+    const relationTo = field.relationTo as string[];
+
+    if (field.required && !relation) {
+      return {
+        relationTo: relationTo[0],
+        value: getFallback(config, relationTo[0]),
+      };
+    }
+
+    if (!field.required && !relation) {
+      return undefined;
+    }
+
+    const value = await fetchRelation(
+      relation!.relationTo,
+      relation!.value as string,
+    );
+
+    return {
+      relationTo: relation!.relationTo,
+      value,
+    };
+  };
+
+  const convertMultiTypeMultiValueRelationshipField = (
+    field: RelationshipField,
+    values: Data,
+  ) => {
+    const relations = values[field.name];
+
+    if (field.required && !relations) {
+      return [];
+    }
+
+    if (!field.required && !relations) {
+      return undefined;
+    }
+
+    return Promise.all(
+      relations.map(async (relation: ValueWithRelation) => {
+        const value = await fetchRelation(
+          relation.relationTo,
+          relation.value as string,
+        );
+
+        return {
+          relationTo: relation.relationTo,
+          value,
+        };
+      }),
+    );
+  };
+
+  const convertRelationshipField = (field: RelationshipField, values: Data) => {
+    const isSingleType = typeof field.relationTo === "string";
+    const isSingleValue = !field.hasMany;
+
+    return match([isSingleType, isSingleValue])
+      .with([true, true], () =>
+        convertSingleTypeSingleValueRelationshipField(field, values),
+      )
+      .with([true, false], () =>
+        convertSingleTypeMultiValueRelationshipField(field, values),
+      )
+      .with([false, true], () =>
+        convertMultiTypeSingleValueRelationshipField(field, values),
+      )
+      .with([false, false], () =>
+        convertMultiTypeMultiValueRelationshipField(field, values),
+      )
+      .exhaustive();
+  };
+
+  const convertMultiSelectField = (field: SelectField, values: Data) => {
+    const value = values[field.name];
+
+    if (field.required && !value) {
+      return [];
+    }
+
+    return value;
+  };
+
+  const convertSelectField = (field: SelectField, values: Data) => {
+    if (field.hasMany) {
+      return convertMultiSelectField(field, values);
+    } else {
+      return convertSingleOptionField(field, values);
+    }
+  };
+
+  const convertUploadField = (field: UploadField, values: Data) => {
+    const id = values[field.name];
+
+    if (field.required && !id) {
+      return getFallback(config, field.relationTo);
+    }
+
+    if (!field.required && !id) {
+      return undefined;
+    }
+
+    return fetchRelation(field.relationTo, values[field.name]);
+  };
+
+  const convertRichTextField = (field: RichTextField, values: Data) => {
+    const value = values[field.name];
+
+    if (field.required && !value) {
+      // lexical editor
+      if ((field.editor as any).editorConfig?.lexical) {
+        return {
+          root: {},
+        };
+      }
+
+      // slate editor
+      return [];
+    }
+
+    return value;
+  };
+
+  const convertSimpleField =
+    (defaultValue: any) =>
+    (field: { name: string; required?: boolean }, values: Data) => {
+      const value = values[field.name];
+
+      if (field.required) {
+        return value ?? defaultValue;
+      }
+
+      return value;
+    };
+
+  const convertCheckboxField = convertSimpleField(false);
+  const convertNumberField = convertSimpleField(0);
+  const convertPointField = convertSimpleField([0, 0]);
+  const convertStringField = convertSimpleField("");
+
+  const getValue = async (field: FieldAffectingData, values: Data) =>
+    match(field)
+      .with({ type: "array" }, (f) => convertArrayField(f, values))
+      .with({ type: "blocks" }, (f) => convertBlockField(f, values))
+      .with({ type: "checkbox" }, (f) => convertCheckboxField(f, values))
+      .with({ type: "code" }, (f) => convertStringField(f, values))
+      .with({ type: "date" }, (f) => convertStringField(f, values))
+      .with({ type: "email" }, (f) => convertStringField(f, values))
+      .with({ type: "group" }, (f) => convertGroupField(f, values))
+      .with({ type: "json" }, (f) => convertStringField(f, values))
+      .with({ type: "number" }, (f) => convertNumberField(f, values))
+      .with({ type: "point" }, (f) => convertPointField(f, values))
+      .with({ type: "radio" }, (f) => convertSingleOptionField(f, values))
+      .with({ type: "relationship" }, (f) =>
+        convertRelationshipField(f, values),
+      )
+      .with({ type: "richText" }, (f) => convertRichTextField(f, values))
+      .with({ type: "select" }, (f) => convertSelectField(f, values))
+      .with({ type: "tab" }, (_) => {
+        throw new Error("tab field not implemented");
+      })
+      .with({ type: "text" }, (f) => convertStringField(f, values))
+      .with({ type: "textarea" }, (f) => convertStringField(f, values))
+      .with({ type: "upload" }, (f) => convertUploadField(f, values))
+      .exhaustive();
+
+  const { fieldConfigs } = config;
+
+  const allFields = getAllFields(fieldConfigs) as FieldAffectingData[];
+  const values = reduceFieldsToValues(fields, true);
+
+  const result: any = {
+    id: config.documentId ?? values.id,
+    createdAt: values.createdAt,
+    updatedAt: values.updatedAt,
+  };
+
+  for (let field of allFields) {
+    result[field.name!] = await getValue(field, values);
+  }
+
+  return result;
 };

@@ -20,7 +20,8 @@
     "docker:example:cms:generate-types": "docker exec -t payload-visual-editor-node-1 /bin/sh -c 'cd example/cms && yarn generate:types && cp src/types/payload-types.ts ../website/src/payload-types.ts'",
     "docker:example:website:yarn": "docker exec -t payload-visual-editor-node-1 /bin/sh -c 'cd example/website && yarn'",
     "docker:example:website:dev": "docker exec -t payload-visual-editor-node-1 /bin/sh -c 'cd example/website && yarn dev'",
-    "prepublishOnly": "yarn build"
+    "prepublishOnly": "yarn build",
+    "test": "node --test tests/*.test.cjs"
   },
   "files": [
     "dist",
