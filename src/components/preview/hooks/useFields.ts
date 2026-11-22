@@ -2,14 +2,14 @@ import { useAllFormFields } from "payload/components/forms";
 import { useEffect, useRef } from "react";
 
 export const useFields = () => {
-    const [fields] = useAllFormFields();
-    const ref = useRef(fields);
+  const [fields] = useAllFormFields();
+  const ref = useRef(fields);
 
-    useEffect(() => {
-        ref.current = fields;
-    }, [fields]);
+  useEffect(() => {
+    ref.current = fields;
+  }, [fields]);
 
-    return ref;
+  return ref;
 };
 
-// TODO: use useEffectEvent when api is stable (https://react.dev/reference/react/experimental_useEffectEvent)
+// Keep the latest form snapshot available to preview callbacks on the supported React 18 runtime.
