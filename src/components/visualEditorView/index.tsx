@@ -65,7 +65,8 @@ export const createVisualEditorView = (options: Options) => (props_: Props) => {
   const props = getCollectionOrGlobalProps(props_);
   const draftSettings =
     props.collection?.versions?.drafts ?? props.global?.versions?.drafts;
-  const autosaveEnabled = Boolean(draftSettings && draftSettings.autosave);
+  const autosaveEnabled =
+    typeof draftSettings === "object" && Boolean(draftSettings.autosave);
 
   const [previewMode, setPreviewMode] = usePersistentState<PreviewMode>(
     "visualEditorPreviewState",
